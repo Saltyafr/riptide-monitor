@@ -29,6 +29,9 @@ on:
   # Allows you to trigger this workflow manually from the Actions tab in GitHub
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   detect-changes:
     name: Detect Site Changes
