@@ -1,4 +1,10 @@
 {
-  "lastChecked": null,
-  "results": {}
+  "lastChecked": "2026-05-18T11:54:12.948Z",
+  "results": {
+    "site_1779099810708": {
+      "changed": false,
+      "lastChange": null,
+      "status": "initialised"
+    }
+  }
 }
