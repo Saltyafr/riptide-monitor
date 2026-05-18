@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Riptide Monitor — Site Health Dashboard</title>
+
+  <!-- IBM Plex Mono: used for all data values, labels, code-like UI elements -->
+  <!-- IBM Plex Sans: used for readable body text and general UI labels -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════
+       RIPTIDE MONITOR — DASHBOARD STYLES
+       Theme: Dark / Industrial / Mission Control
+       Fonts: IBM Plex Mono (data) + IBM Plex Sans (labels/body)
+    ═══════════════════════════════════════════════════════════════════ */
+
+    /* ── CSS Custom Properties (variables) ──────────────────────────────
+       All colours and fonts defined here so the whole design is easy
+       to adjust by changing a single value. */
+    :root {
+      /* Backgrounds */
+      --bg:          #080a0d;
+      --surface:     #0d1018;
+      --surface-2:   #111620;
+      --surface-3:   #161d2e;
+
+      /* Borders */
+      --border:      #1c2438;
+      --border-2:    #243050;
+
+      /* Text */
+      --text:        #bcc8dc;
+      --text-muted:  #3f5070;
+      --text-dim:    #1e2d45;
+
+      /* Status colours */
+      --green:       #00e87a;
+      --green-dim:   rgba(0, 232, 122, 0.07);
+      --green-glow:  rgba(0, 232, 122, 0.25);
+      --yellow:      #f5c518;
+      --yellow-dim:  rgba(245, 197, 24, 0.07);
+      --red:         #ff3860;
+      --red-dim:     rgba(255, 56, 96, 0.07);
+      --blue:        #4a9eff;
+      --blue-dim:    rgba(74, 158, 255, 0.07);
+
+      /* Typography */
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+
+      /* Geometry */
+      --radius:      4px;
+      --card-radius: 6px;
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    button { cursor: pointer; font-family: inherit; }
+    a { color: inherit; }
+
+    /* ── Body ───────────────────────────────────────────────────────── */
+    body {
+      font-family: var(--sans);
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      /* Subtle dot grid — gives the "technical grid" mission control feel */
+      background-image: radial-gradient(circle, rgba(30, 45, 70, 0.6) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* ── Top accent bar ─────────────────────────────────────────────── */
+    /* The animated gradient bar at the very top of the page */
+    .system-bar {
+      height: 2px;
+      background: linear-gradient(
+        90deg,
+        var(--blue) 0%,
+        var(--green) 35%,
+        var(--blue) 65%,
+        var(--green) 100%
+      );
+      background-size: 300% 100%;
+      animation: bar-slide 5s linear infinite;
+    }
+    @keyframes bar-slide {
+      0%   { background-position: 300% 0; }
+      100% { background-position: -300% 0; }
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8, 10, 13, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+
+    /* The live indicator dot — pulses green to show the system is active */
+    .live-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 8px;
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+      animation: live-pulse 2.5s ease-in-out infinite;
+    }
+    @keyframes live-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--green-glow); }
+      50%       { opacity: 0.8; box-shadow: 0 0 0 5px transparent; }
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      color: var(--blue);
+      text-transform: uppercase;
+    }
+
+    .logo-subtitle {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .last-refresh {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+
+    .countdown-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      white-space: nowrap;
+    }
+
+    /* ── Buttons ────────────────────────────────────────────────────── */
+    .btn {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-2);
+      background: var(--surface-2);
+      color: var(--text);
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .btn-primary {
+      background: var(--blue-dim);
+      border-color: rgba(74, 158, 255, 0.5);
+      color: var(--blue);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: rgba(74, 158, 255, 0.14);
+      border-color: var(--blue);
+    }
+
+    .btn-green {
+      background: var(--green-dim);
+      border-color: rgba(0, 232, 122, 0.4);
+      color: var(--green);
+    }
+    .btn-green:hover:not(:disabled) {
+      background: rgba(0, 232, 122, 0.14);
+      border-color: var(--green);
+    }
+
+    .btn-danger {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-muted);
+      font-size: 10px;
+      padding: 5px 10px;
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: var(--red-dim);
+      border-color: rgba(255, 56, 96, 0.4);
+      color: var(--red);
+    }
+
+    /* ── Main content area ──────────────────────────────────────────── */
+    .main {
+      padding: 24px 28px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    /* ── Stats bar ──────────────────────────────────────────────────── */
+    /* Four summary counters across the top: Total / Online / Warnings / Offline */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 18px 22px;
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+
+    .stat-num {
+      font-family: var(--mono);
+      font-size: 34px;
+      font-weight: 600;
+      line-height: 1;
+      min-width: 2ch;
+    }
+    .stat-num.c-blue   { color: var(--blue); }
+    .stat-num.c-green  { color: var(--green); }
+    .stat-num.c-yellow { color: var(--yellow); }
+    .stat-num.c-red    { color: var(--red); }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 500;
+    }
+
+    /* ── Alert banner ───────────────────────────────────────────────── */
+    /* Only shown when one or more sites are offline */
+    .alert-banner {
+      display: none;
+      background: var(--red-dim);
+      border: 1px solid rgba(255, 56, 96, 0.4);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--red);
+      letter-spacing: 0.04em;
+      line-height: 1.5;
+    }
+    .alert-banner.visible { display: block; }
+    .alert-label { font-weight: 600; margin-right: 6px; }
+
+    /* ── Cards grid ─────────────────────────────────────────────────── */
+    /* Responsive grid — minimum card width 380px per spec */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+    }
+
+    /* ── Empty / no-config states ───────────────────────────────────── */
+    .state-panel {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 72px 24px;
+      border: 1px dashed var(--border-2);
+      border-radius: var(--card-radius);
+    }
+    .state-icon {
+      font-size: 36px;
+      opacity: 0.2;
+      margin-bottom: 18px;
+    }
+    .state-title {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .state-body {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+      line-height: 1.6;
+    }
+
+    /* ── Site card ──────────────────────────────────────────────────── */
+    .site-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top-width: 3px;
+      border-radius: var(--card-radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Top border colour driven by status class */
+    .site-card.s-up      { border-top-color: var(--green); }
+    .site-card.s-warning { border-top-color: var(--yellow); }
+    .site-card.s-down    { border-top-color: var(--red); }
+    .site-card.s-unknown { border-top-color: var(--text-dim); }
+
+    /* ── Card header ── */
+    .card-head {
+      padding: 16px 18px 13px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-head-text { flex: 1; min-width: 0; }
+
+    .card-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-url {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Status badge — top right of each card */
+    .s-badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .s-badge.up      { background: var(--green-dim);  color: var(--green);  border-color: rgba(0,232,122,0.3); }
+    .s-badge.warning { background: var(--yellow-dim); color: var(--yellow); border-color: rgba(245,197,24,0.3); }
+    .s-badge.down    { background: var(--red-dim);    color: var(--red);    border-color: rgba(255,56,96,0.3); }
+    .s-badge.unknown { background: transparent;       color: var(--text-muted); border-color: var(--border-2); }
+
+    /* ── Card metrics 2×2 grid ── */
+    .card-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+    }
+
+    .metric {
+      padding: 14px 18px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    /* Remove borders on the right column and bottom row */
+    .metric:nth-child(2) { border-right: none; }
+    .metric:nth-child(3) { border-bottom: none; }
+    .metric:nth-child(4) { border-right: none; border-bottom: none; }
+
+    .metric-label {
+      font-size: 9px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 7px;
+    }
+
+    .metric-val {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 600;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    /* Smaller font for text values like "Stable" / "Changed" */
+    .metric-val.text-val { font-size: 15px; }
+    .metric-val.c-green  { color: var(--green); }
+    .metric-val.c-yellow { color: var(--yellow); }
+    .metric-val.c-red    { color: var(--red); }
+    .metric-val.c-muted  { color: var(--text-muted); font-size: 15px; }
+
+    .metric-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ── Card footer ── */
+    .card-foot {
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+    }
+
+    .foot-stats {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .foot-item {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .foot-item em {
+      font-style: normal;
+      color: var(--text);
+    }
+
+    /* ── Modals ─────────────────────────────────────────────────────── */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.88);
+      backdrop-filter: blur(5px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-bg.open { display: flex; }
+
+    .modal-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border-2);
+      border-radius: 8px;
+      padding: 28px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
+    }
+
+    .modal-title {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+
+    .modal-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    /* ── Form elements ── */
+    .field { margin-bottom: 16px; }
+
+    .field-label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .field-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+      appearance: none;
+    }
+    .field-input:focus { border-color: var(--blue); }
+    .field-input::placeholder { color: var(--text-dim); }
+
+    .field-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 5px;
+      line-height: 1.5;
+    }
+
+    .field-error {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 8px;
+    }
+
+    /* Inline note inside add-site modal */
+    .modal-note {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--yellow);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-top: 18px;
+    }
+    .modal-note-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--yellow);
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .header { padding: 14px 16px; }
+      .main { padding: 14px 16px; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .last-refresh { display: none; }
+      .countdown-badge { display: none; }
+    }
+    @media (max-width: 420px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .stat-num { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top animated accent bar -->
+  <div class="system-bar"></div>
+
+  <!-- ══════════════════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="live-dot"></span>Riptide Monitor
+      </div>
+      <div class="logo-subtitle">Site Health Dashboard</div>
+    </div>
+    <div class="header-right">
+      <span class="last-refresh" id="last-refresh">Last refresh: —</span>
+      <span class="countdown-badge" id="countdown"></span>
+      <button class="btn" id="btn-refresh" onclick="refreshAll()">↺ Refresh</button>
+      <button class="btn btn-primary" onclick="showAddSite()">+ Add Site</button>
+      <button class="btn" onclick="showSetup()">⚙ Setup</button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════
+       MAIN
+  ══════════════════════════════════════════════════ -->
+  <main class="main">
+
+    <!-- Stats summary bar -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-num c-blue"   id="s-total">—</div>
+        <div class="stat-label">Total Sites</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num c-green"  id="s-online">—</div>
+        <div class="stat-label">Online</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num c-yellow" id="s-warnings">—</div>
+        <div class="stat-label">Warnings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num c-red"    id="s-offline">—</div>
+        <div class="stat-label">Offline</div>
+      </div>
+    </div>
+
+    <!-- Alert banner: only visible when sites are offline -->
+    <div class="alert-banner" id="alert-banner">
+      <span class="alert-label">⚠ OFFLINE:</span>
+      <span id="alert-names"></span>
+    </div>
+
+    <!-- Cards grid: site cards injected here by JS -->
+    <div class="cards-grid" id="cards-grid"></div>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════════
+       SETUP MODAL
+       First-time config — UptimeRobot key + GitHub details
+  ══════════════════════════════════════════════════ -->
+  <div class="modal-bg" id="modal-setup">
+    <div class="modal-box">
+      <div class="modal-title">⚙ Dashboard Setup</div>
+      <div class="modal-desc">
+        Connect the dashboard to UptimeRobot and your GitHub repo.
+        These values are saved in your browser only — never transmitted anywhere.
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="f-uptime-key">UptimeRobot Read-Only API Key</label>
+        <input class="field-input" id="f-uptime-key" type="text"
+               placeholder="ur-xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+        <div class="field-hint">
+          UptimeRobot → My Settings → API Settings → Read-Only API Key
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="f-gh-user">GitHub Username</label>
+        <input class="field-input" id="f-gh-user" type="text"
+               placeholder="your-github-username" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="f-gh-repo">GitHub Repository Name</label>
+        <input class="field-input" id="f-gh-repo" type="text"
+               placeholder="riptide-monitor" autocomplete="off" spellcheck="false">
+        <div class="field-hint">The exact name of the repo where this dashboard is hosted.</div>
+      </div>
+
+      <div class="field-error" id="setup-err" style="display:none"></div>
+
+      <div class="modal-actions">
+        <button class="btn" onclick="hideSetup()">Cancel</button>
+        <button class="btn btn-green" onclick="saveSetup()">Save &amp; Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       ADD SITE MODAL
+  ══════════════════════════════════════════════════ -->
+  <div class="modal-bg" id="modal-add-site">
+    <div class="modal-box">
+      <div class="modal-title">+ Add Client Site</div>
+      <div class="modal-desc">
+        Add a client website to monitor on this dashboard.
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="f-site-name">Client / Business Name</label>
+        <input class="field-input" id="f-site-name" type="text"
+               placeholder="Acme Corp" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="f-site-url">Website URL</label>
+        <input class="field-input" id="f-site-url" type="url"
+               placeholder="https://acmecorp.co.za" autocomplete="off" spellcheck="false">
+        <div class="field-hint">Must start with https://</div>
+      </div>
+
+      <div class="field-error" id="add-site-err" style="display:none"></div>
+
+      <div class="modal-note">
+        <span class="modal-note-label">⚠ Manual steps required after saving</span>
+        1. Add this site as a monitor in UptimeRobot (HTTP/HTTPS type)<br>
+        2. Add it to <code>monitoring-data/sites.json</code> in your GitHub repo<br>
+        Both must match this URL exactly for monitoring to work.
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" onclick="hideAddSite()">Cancel</button>
+        <button class="btn btn-green" onclick="submitAddSite()">Add Site</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       JAVASCRIPT
+       All dashboard logic. No external libraries — plain vanilla JS.
+  ══════════════════════════════════════════════════════════════════ -->
+  <script>
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CONSTANTS
+  // ═══════════════════════════════════════════════════════════════════
+
+  // localStorage keys
+  const KEY_CONFIG = 'riptide_config'; // { uptimeKey, githubUser, githubRepo }
+  const KEY_SITES  = 'riptide_sites';  // [{ id, name, url }, ...]
+
+  // Auto-refresh interval: 5 minutes (does not affect UptimeRobot, which runs independently)
+  const REFRESH_MS = 5 * 60 * 1000;
+
+  // External API endpoints
+  const UPTIMEROBOT_ENDPOINT = 'https://api.uptimerobot.com/v2/getMonitors';
+  const PAGESPEED_ENDPOINT   = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // STATE
+  // All live data is kept in memory. Rebuilt on every refresh.
+  // ═══════════════════════════════════════════════════════════════════
+
+  let config          = null;  // Loaded from localStorage
+  let sites           = [];    // Loaded from localStorage
+  let siteData        = {};    // Keyed by site ID — holds all fetched metrics
+  let autoRefreshId   = null;  // setTimeout handle
+  let countdownId     = null;  // setInterval handle for countdown display
+  let nextRefreshAt   = null;  // Timestamp of next scheduled auto-refresh
+  let linkLastChecked = null;  // ISO string from link-check-results.json
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CONFIG — localStorage read/write
+  // ═══════════════════════════════════════════════════════════════════
+
+  function loadConfig() {
+    try {
+      const raw = localStorage.getItem(KEY_CONFIG);
+      config = raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      config = null;
+    }
+  }
+
+  function persistConfig(cfg) {
+    config = cfg;
+    localStorage.setItem(KEY_CONFIG, JSON.stringify(cfg));
+  }
+
+  // Returns true only when all three required config values are present
+  function isConfigured() {
+    return !!(config && config.uptimeKey && config.githubUser && config.githubRepo);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SITES — localStorage read/write
+  // ═══════════════════════════════════════════════════════════════════
+
+  function loadSites() {
+    try {
+      const raw = localStorage.getItem(KEY_SITES);
+      sites = raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      sites = [];
+    }
+  }
+
+  function persistSites() {
+    localStorage.setItem(KEY_SITES, JSON.stringify(sites));
+  }
+
+  // Add a new site. Returns the new site object.
+  function addSite(name, url) {
+    const id   = 'site_' + Date.now();
+    const site = { id, name, url: cleanUrl(url) };
+    sites.push(site);
+    persistSites();
+    return site;
+  }
+
+  // Remove a site by ID
+  function removeSite(id) {
+    sites = sites.filter(s => s.id !== id);
+    delete siteData[id];
+    persistSites();
+  }
+
+  // Trim whitespace and strip trailing slash for consistent comparison
+  function cleanUrl(url) {
+    return url.trim().replace(/\/$/, '');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FETCH: UPTIMEROBOT
+  // Calls the UptimeRobot read-only API and maps monitor data to sites.
+  // UptimeRobot status codes:
+  //   0 = paused, 1 = not checked yet, 2 = UP, 8 = seems down, 9 = DOWN
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function fetchUptimeData() {
+    if (!isConfigured()) return;
+
+    try {
+      const res = await fetch(UPTIMEROBOT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: [
+          'api_key='             + encodeURIComponent(config.uptimeKey),
+          'format=json',
+          'logs=0',
+          'response_times=1',
+          'response_times_limit=1',
+          'all_time_uptime_ratio=1'
+        ].join('&')
+      });
+
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (data.stat !== 'ok') throw new Error(data.error?.message || 'UptimeRobot error');
+
+      const monitors = data.monitors || [];
+
+      for (const site of sites) {
+        const match = matchMonitor(monitors, site);
+        const sd    = ensureSiteData(site.id);
+
+        if (match) {
+          sd.uptimeStatus = match.status;
+          sd.uptimeRatio  = match.all_time_uptime_ratio || null;
+          // Latest response time reading from UptimeRobot
+          const rt = match.response_times && match.response_times[0];
+          sd.uptimeResponseMs = rt ? rt.value : null;
+        } else {
+          // No monitor found for this site in UptimeRobot yet
+          sd.uptimeStatus = null;
+          sd.uptimeRatio  = null;
+        }
+      }
+
+    } catch (err) {
+      console.warn('[UptimeRobot]', err.message);
+      // Leave existing uptime data in place rather than wiping it on a transient error
+    }
+  }
+
+  // Find the UptimeRobot monitor that matches a given site.
+  // Matching strategy: exact URL match (after stripping trailing slash),
+  // OR the monitor URL contains the site's hostname.
+  function matchMonitor(monitors, site) {
+    let hostname;
+    try { hostname = new URL(site.url).hostname; }
+    catch (_) { return null; }
+
+    const siteUrlClean = site.url.replace(/\/$/, '');
+
+    return monitors.find(m => {
+      const monUrlClean = (m.url || '').replace(/\/$/, '');
+      return monUrlClean === siteUrlClean || (m.url || '').includes(hostname);
+    }) || null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FETCH: GOOGLE PAGESPEED INSIGHTS
+  // Called once per site. Uses mobile strategy, performance category only.
+  // No API key required at Phase 1 scale.
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function fetchPageSpeed(site) {
+    const url = PAGESPEED_ENDPOINT
+              + '?url='      + encodeURIComponent(site.url)
+              + '&strategy=mobile'
+              + '&category=performance';
+
+    const sd = ensureSiteData(site.id);
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      const lhr = data.lighthouseResult;
+      if (!lhr) throw new Error('Missing lighthouseResult');
+
+      // Score comes as 0.0–1.0 decimal — multiply to get 0–100
+      const scoreRaw = lhr.categories?.performance?.score;
+      sd.speedScore  = scoreRaw != null ? Math.round(scoreRaw * 100) : null;
+
+      // Server response time in milliseconds
+      const srtRaw  = lhr.audits?.['server-response-time']?.numericValue;
+      sd.responseMs = srtRaw != null ? Math.round(srtRaw) : null;
+
+    } catch (err) {
+      console.warn('[PageSpeed] ' + site.url, err.message);
+      sd.speedScore  = null;
+      sd.responseMs  = null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FETCH: GITHUB RAW — LINK CHECK RESULTS
+  // Reads the JSON file committed daily by the link-checker GitHub Action.
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function fetchLinkData() {
+    if (!isConfigured()) return;
+
+    const url = rawUrl('link-check-results.json');
+
+    try {
+      // Cache-bust so the browser always fetches the latest commit
+      const res  = await fetch(url + '?t=' + Date.now());
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      linkLastChecked = data.lastChecked || null;
+
+      for (const site of sites) {
+        const sd     = ensureSiteData(site.id);
+        const result = data.results?.[site.id];
+
+        if (result) {
+          sd.brokenLinks      = Array.isArray(result.brokenLinks) ? result.brokenLinks.length : 0;
+          sd.brokenLinkStatus = result.status || null;
+          sd.totalLinks       = result.totalChecked || 0;
+        } else {
+          sd.brokenLinks      = null;
+          sd.brokenLinkStatus = null;
+          sd.totalLinks       = null;
+        }
+      }
+
+    } catch (err) {
+      console.warn('[Link results]', err.message);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FETCH: GITHUB RAW — CHANGE DETECTION RESULTS
+  // Reads the JSON file committed daily by the change-detector GitHub Action.
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function fetchChangeData() {
+    if (!isConfigured()) return;
+
+    const url = rawUrl('change-results.json');
+
+    try {
+      const res  = await fetch(url + '?t=' + Date.now());
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      for (const site of sites) {
+        const sd     = ensureSiteData(site.id);
+        const result = data.results?.[site.id];
+
+        if (result) {
+          // 'initialised' is a first-run marker — treat as stable, no alert
+          sd.siteChanged    = result.changed === true;
+          sd.changeStatus   = result.status  || null;
+          sd.lastChangeTime = result.lastChange || null;
+        } else {
+          sd.siteChanged    = null;
+          sd.changeStatus   = null;
+          sd.lastChangeTime = null;
+        }
+      }
+
+    } catch (err) {
+      console.warn('[Change results]', err.message);
+    }
+  }
+
+  // Build the raw GitHub content URL for a given file in monitoring-data/
+  function rawUrl(filename) {
+    return 'https://raw.githubusercontent.com/'
+         + config.githubUser + '/'
+         + config.githubRepo
+         + '/main/monitoring-data/' + filename;
+  }
+
+  // Ensure a siteData entry exists for a given site ID (initialises to {})
+  function ensureSiteData(id) {
+    if (!siteData[id]) siteData[id] = {};
+    return siteData[id];
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // STATUS LOGIC
+  // Determines the overall status for a site based on all fetched data.
+  //
+  // Rules (from spec Section 4.1):
+  //   down    — UptimeRobot reports status 9 (confirmed down)
+  //   warning — UptimeRobot is up (2) AND: speed < 50, or broken links, or site changed
+  //   up      — UptimeRobot status 2 AND no warning conditions
+  //   unknown — No UptimeRobot data yet (null / not checked / paused)
+  // ═══════════════════════════════════════════════════════════════════
+
+  function getSiteStatus(id) {
+    const d = siteData[id];
+    if (!d) return 'unknown';
+
+    if (d.uptimeStatus === 9)   return 'down';
+    if (d.uptimeStatus !== 2)   return 'unknown'; // null, 0, 1, 8 → unknown
+
+    // Site is up — check for warning conditions
+    const speedWarn   = d.speedScore  !== null && d.speedScore  < 50;
+    const linksWarn   = d.brokenLinks !== null && d.brokenLinks  > 0;
+    const changeWarn  = d.siteChanged === true;
+
+    return (speedWarn || linksWarn || changeWarn) ? 'warning' : 'up';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // RENDERING
+  // All DOM updates go through these functions.
+  // ═══════════════════════════════════════════════════════════════════
+
+  function renderAll() {
+    renderStats();
+    renderAlert();
+    renderGrid();
+    updateRefreshLabel();
+  }
+
+  // Update the four stat numbers at the top of the page
+  function renderStats() {
+    let total = sites.length, online = 0, warnings = 0, offline = 0;
+    for (const s of sites) {
+      const st = getSiteStatus(s.id);
+      if (st === 'up')      online++;
+      if (st === 'warning') warnings++;
+      if (st === 'down')    offline++;
+    }
+    document.getElementById('s-total').textContent    = total;
+    document.getElementById('s-online').textContent   = online;
+    document.getElementById('s-warnings').textContent = warnings;
+    document.getElementById('s-offline').textContent  = offline;
+  }
+
+  // Show or hide the offline alert banner
+  function renderAlert() {
+    const downed = sites.filter(s => getSiteStatus(s.id) === 'down');
+    const banner = document.getElementById('alert-banner');
+    if (downed.length > 0) {
+      document.getElementById('alert-names').textContent = downed.map(s => s.name).join(', ');
+      banner.classList.add('visible');
+    } else {
+      banner.classList.remove('visible');
+    }
+  }
+
+  // Render all site cards (or an empty/unconfigured state)
+  function renderGrid() {
+    const grid = document.getElementById('cards-grid');
+
+    if (!isConfigured()) {
+      grid.innerHTML = `
+        <div class="state-panel">
+          <div class="state-icon">⚙</div>
+          <div class="state-title">Setup Required</div>
+          <div class="state-body">
+            Click Setup in the top-right corner to enter your<br>
+            UptimeRobot API key and GitHub repository details.
+          </div>
+          <button class="btn btn-primary" onclick="showSetup()">⚙ Open Setup</button>
+        </div>`;
+      return;
+    }
+
+    if (sites.length === 0) {
+      grid.innerHTML = `
+        <div class="state-panel">
+          <div class="state-icon">◎</div>
+          <div class="state-title">No Sites Monitored</div>
+          <div class="state-body">Add your first client website to begin monitoring.</div>
+          <button class="btn btn-primary" onclick="showAddSite()">+ Add Site</button>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = sites.map(buildCard).join('');
+  }
+
+  // Build the HTML for a single site card
+  function buildCard(site) {
+    const d      = siteData[site.id] || {};
+    const status = getSiteStatus(site.id);
+
+    // ── Status badge ──
+    const badgeText  = { up: 'Online', warning: 'Warning', down: 'Offline', unknown: 'Checking…' };
+    const badgeClass = { up: 'up', warning: 'warning', down: 'down', unknown: 'unknown' };
+
+    // ── Page Speed ──
+    const spd      = d.speedScore;
+    const spdColor = spd == null ? 'c-muted' : spd >= 90 ? 'c-green' : spd >= 50 ? 'c-yellow' : 'c-red';
+    const spdVal   = spd != null ? spd : '—';
+    const spdSub   = spd != null
+                   ? (spd >= 90 ? 'good' : spd >= 50 ? 'needs work' : 'poor')
+                   : 'not loaded';
+
+    // ── Response Time ──
+    const rt      = d.responseMs;
+    const rtColor = rt == null ? 'c-muted' : rt < 500 ? 'c-green' : rt < 1500 ? 'c-yellow' : 'c-red';
+    const rtVal   = rt != null ? rt + 'ms' : '—';
+    const rtSub   = rt != null ? (rt < 500 ? 'fast' : rt < 1500 ? 'moderate' : 'slow') : 'not loaded';
+
+    // ── Broken Links ──
+    const bl      = d.brokenLinks;
+    const blColor = bl == null ? 'c-muted' : bl === 0 ? 'c-green' : 'c-red';
+    const blVal   = bl == null ? '—' : bl === 0 ? 'None' : bl;
+    const blSub   = bl == null ? 'not checked' : bl === 0 ? 'all links ok' : bl + ' broken';
+
+    // ── Site Changes ──
+    const chg      = d.siteChanged;
+    const chgColor = chg == null ? 'c-muted' : chg ? 'c-red' : 'c-green';
+    const chgVal   = chg == null ? '—' : chg ? 'Changed' : 'Stable';
+    const chgSub   = chg == null     ? 'not checked'
+                   : d.changeStatus === 'initialised' ? 'baseline saved'
+                   : chg ? 'since last check' : 'no changes';
+
+    // ── Footer data ──
+    const uptimePct  = d.uptimeRatio ? d.uptimeRatio + '%' : '—';
+    const lastCheck  = formatDate(linkLastChecked);
+
+    return `
+<div class="site-card s-${status}" id="card-${site.id}">
+
+  <div class="card-head">
+    <div class="card-head-text">
+      <div class="card-name">${esc(site.name)}</div>
+      <div class="card-url">${esc(site.url)}</div>
+    </div>
+    <span class="s-badge ${badgeClass[status]}">${badgeText[status]}</span>
+  </div>
+
+  <div class="card-metrics">
+    <div class="metric">
+      <div class="metric-label">Page Speed</div>
+      <div class="metric-val ${spdColor}">${spdVal}</div>
+      <div class="metric-sub">${spdSub}</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Response Time</div>
+      <div class="metric-val ${rtColor}">${rtVal}</div>
+      <div class="metric-sub">${rtSub}</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Broken Links</div>
+      <div class="metric-val ${blColor}">${blVal}</div>
+      <div class="metric-sub">${blSub}</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Site Changes</div>
+      <div class="metric-val text-val ${chgColor}">${chgVal}</div>
+      <div class="metric-sub">${chgSub}</div>
+    </div>
+  </div>
+
+  <div class="card-foot">
+    <div class="foot-stats">
+      <div class="foot-item">Uptime: <em>${uptimePct}</em></div>
+      <div class="foot-item">Links checked: <em>${lastCheck}</em></div>
+    </div>
+    <button class="btn btn-danger"
+            onclick="confirmRemove('${site.id}', '${esc(site.name)}')">
+      Remove
+    </button>
+  </div>
+
+</div>`;
+  }
+
+  // Update the "Last refresh" timestamp in the header
+  function updateRefreshLabel() {
+    document.getElementById('last-refresh').textContent =
+      'Last refresh: ' + new Date().toLocaleTimeString();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // REFRESH — fetch all data sources then re-render
+  // PageSpeed calls are fired in parallel for all sites.
+  // ═══════════════════════════════════════════════════════════════════
+
+  async function refreshAll() {
+    if (!isConfigured()) { renderAll(); return; }
+
+    const btn = document.getElementById('btn-refresh');
+    btn.disabled    = true;
+    btn.textContent = '↺ Refreshing…';
+
+    // Draw current (possibly stale) data immediately so the UI isn't blank
+    renderAll();
+
+    try {
+      // Fire all fetches in parallel:
+      // - UptimeRobot (one call covers all sites)
+      // - GitHub raw link results (one call covers all sites)
+      // - GitHub raw change results (one call covers all sites)
+      // - PageSpeed (one call per site, all in parallel)
+      await Promise.all([
+        fetchUptimeData(),
+        fetchLinkData(),
+        fetchChangeData(),
+        ...sites.map(s => fetchPageSpeed(s))
+      ]);
+    } catch (err) {
+      // Individual fetches handle their own errors — this is a belt-and-suspenders catch
+      console.error('[refreshAll]', err);
+    }
+
+    renderAll();
+
+    btn.disabled    = false;
+    btn.textContent = '↺ Refresh';
+
+    // Restart the auto-refresh countdown
+    scheduleAutoRefresh();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // AUTO-REFRESH + COUNTDOWN
+  // ═══════════════════════════════════════════════════════════════════
+
+  function scheduleAutoRefresh() {
+    // Clear any previous timers
+    if (autoRefreshId) clearTimeout(autoRefreshId);
+    if (countdownId)   clearInterval(countdownId);
+
+    nextRefreshAt = Date.now() + REFRESH_MS;
+    autoRefreshId = setTimeout(refreshAll, REFRESH_MS);
+
+    // Update the countdown display every second
+    const countdownEl = document.getElementById('countdown');
+    countdownId = setInterval(() => {
+      const ms   = nextRefreshAt - Date.now();
+      if (ms <= 0) { clearInterval(countdownId); return; }
+      const m    = Math.floor(ms / 60000);
+      const s    = Math.floor((ms % 60000) / 1000);
+      countdownEl.textContent = 'Next refresh ' + m + ':' + String(s).padStart(2, '0');
+    }, 1000);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SETUP MODAL
+  // ═══════════════════════════════════════════════════════════════════
+
+  function showSetup() {
+    if (config) {
+      document.getElementById('f-uptime-key').value = config.uptimeKey  || '';
+      document.getElementById('f-gh-user').value    = config.githubUser || '';
+      document.getElementById('f-gh-repo').value    = config.githubRepo || '';
+    }
+    document.getElementById('setup-err').style.display = 'none';
+    document.getElementById('modal-setup').classList.add('open');
+  }
+
+  function hideSetup() {
+    document.getElementById('modal-setup').classList.remove('open');
+  }
+
+  function saveSetup() {
+    const uptimeKey  = document.getElementById('f-uptime-key').value.trim();
+    const githubUser = document.getElementById('f-gh-user').value.trim();
+    const githubRepo = document.getElementById('f-gh-repo').value.trim();
+    const errEl      = document.getElementById('setup-err');
+
+    if (!uptimeKey || !githubUser || !githubRepo) {
+      errEl.textContent    = 'All three fields are required.';
+      errEl.style.display  = 'block';
+      return;
+    }
+
+    persistConfig({ uptimeKey, githubUser, githubRepo });
+    hideSetup();
+    refreshAll();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ADD SITE MODAL
+  // ═══════════════════════════════════════════════════════════════════
+
+  function showAddSite() {
+    document.getElementById('f-site-name').value          = '';
+    document.getElementById('f-site-url').value           = '';
+    document.getElementById('add-site-err').style.display = 'none';
+    document.getElementById('modal-add-site').classList.add('open');
+    setTimeout(() => document.getElementById('f-site-name').focus(), 80);
+  }
+
+  function hideAddSite() {
+    document.getElementById('modal-add-site').classList.remove('open');
+  }
+
+  function submitAddSite() {
+    const name  = document.getElementById('f-site-name').value.trim();
+    const url   = document.getElementById('f-site-url').value.trim();
+    const errEl = document.getElementById('add-site-err');
+
+    if (!name) {
+      errEl.textContent   = 'Client name is required.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    if (!url || !url.startsWith('http')) {
+      errEl.textContent   = 'A valid URL starting with https:// is required.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    // Prevent duplicate URLs
+    if (sites.some(s => cleanUrl(s.url) === cleanUrl(url))) {
+      errEl.textContent   = 'This URL is already in the dashboard.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const newSite = addSite(name, url);
+    hideAddSite();
+
+    // Immediately fetch data for the new site, then re-render
+    renderAll(); // shows the card in "checking" state right away
+    Promise.all([
+      fetchUptimeData(),
+      fetchPageSpeed(newSite),
+      fetchLinkData(),
+      fetchChangeData()
+    ]).then(renderAll);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // REMOVE SITE
+  // ═══════════════════════════════════════════════════════════════════
+
+  function confirmRemove(id, name) {
+    const msg = 'Remove "' + name + '" from the dashboard?\n\n'
+              + 'Remember to also:\n'
+              + '• Remove it from UptimeRobot\n'
+              + '• Remove it from monitoring-data/sites.json in GitHub';
+    if (confirm(msg)) {
+      removeSite(id);
+      renderAll();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UTILITIES
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Format an ISO timestamp to a short human-readable string
+  function formatDate(iso) {
+    if (!iso) return '—';
+    try {
+      const d     = new Date(iso);
+      const today = new Date();
+      if (d.toDateString() === today.toDateString()) {
+        return 'Today ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+    } catch (_) { return '—'; }
+  }
+
+  // Escape HTML to prevent XSS — used before inserting any user-supplied strings into innerHTML
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // MODAL CLOSE ON BACKGROUND CLICK
+  // ═══════════════════════════════════════════════════════════════════
+
+  document.getElementById('modal-setup').addEventListener('click', function(e) {
+    if (e.target === this) hideSetup();
+  });
+  document.getElementById('modal-add-site').addEventListener('click', function(e) {
+    if (e.target === this) hideAddSite();
+  });
+
+  // Allow Enter key to submit in the last field of each modal
+  document.getElementById('f-gh-repo').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveSetup();
+  });
+  document.getElementById('f-site-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitAddSite();
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // INIT — runs once when the page loads
+  // ═══════════════════════════════════════════════════════════════════
+
+  function init() {
+    loadConfig();
+    loadSites();
+
+    // If the dashboard has never been set up, show the setup modal automatically
+    if (!isConfigured()) {
+      renderAll(); // renders the "setup required" state panel
+      showSetup();
+      return;
+    }
+
+    // Fetch all data and start the auto-refresh cycle
+    refreshAll();
+    scheduleAutoRefresh();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  </script>
+</body>
+</html>

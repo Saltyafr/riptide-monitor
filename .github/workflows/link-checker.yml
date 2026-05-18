@@ -1,0 +1,121 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# link-checker.yml
+# Riptide Studios — Site Health Monitor
+#
+# What this workflow does:
+#   1. Runs every day at 6:00am UTC on GitHub's servers
+#   2. Installs the linkinator npm package
+#   3. Runs scripts/check-links.js against all sites in monitoring-data/sites.json
+#   4. Commits the updated results back to the repo
+#   5. If broken links were found (script exits with code 1), sends an email alert
+#
+# Can also be triggered manually from the GitHub Actions tab (workflow_dispatch).
+#
+# Required GitHub repository secrets (set in Settings → Secrets → Actions):
+#   GMAIL_USER   — The Gmail address used to send alert emails
+#   GMAIL_PASS   — The App Password for that Gmail account (NOT the login password)
+#   ALERT_EMAIL  — The email address that receives the alert (e.g. your work email)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Broken Link Checker
+
+on:
+  schedule:
+    # Runs at 6:00am UTC every day
+    # Cron format: minute hour day month weekday
+    - cron: '0 6 * * *'
+
+  # Allows you to trigger this workflow manually from the Actions tab in GitHub
+  workflow_dispatch:
+
+jobs:
+  check-links:
+    name: Check for Broken Links
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ── Step 1: Check out the repository ──────────────────────────────────
+      # This downloads all the repo files onto the GitHub Actions runner machine
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Step 2: Set up Node.js ────────────────────────────────────────────
+      # Installs Node.js version 20 on the runner
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Step 3: Install linkinator ─────────────────────────────────────────
+      # linkinator is the npm package that checks for broken links
+      # Installed globally so we can use it as a module in our script
+      - name: Install linkinator
+        run: npm install -g linkinator
+
+      # ── Step 4: Run the link checker script ───────────────────────────────
+      # This is the main step. The script:
+      #   - Reads sites from monitoring-data/sites.json
+      #   - Checks each site's homepage for broken links
+      #   - Writes results to monitoring-data/link-check-results.json
+      #   - Exits with code 1 if broken links are found (triggers the email step below)
+      #   - Exits with code 0 if all links are healthy
+      #
+      # continue-on-error: true means the workflow continues even if this step
+      # exits with code 1 — we still need to commit results and send the email
+      - name: Run link checker
+        id: link_check
+        continue-on-error: true
+        run: node scripts/check-links.js
+
+      # ── Step 5: Commit and push results ───────────────────────────────────
+      # Commits the updated link-check-results.json back to the repo
+      # The dashboard reads this file from GitHub raw content URLs
+      #
+      # Uses 'git diff --quiet' to check if the file actually changed before
+      # committing — prevents empty commits when results haven't changed
+      - name: Commit and push results
+        run: |
+          git config user.email "monitor@riptidestudios.co.za"
+          git config user.name "Riptide Monitor"
+
+          git add monitoring-data/link-check-results.json
+
+          # Only commit if there are actual changes to the file
+          if git diff --staged --quiet; then
+            echo "No changes to commit — results unchanged since last run."
+          else
+            git commit -m "Update link check results [$(date -u '+%Y-%m-%d %H:%M') UTC]"
+            git push
+          fi
+
+      # ── Step 6: Send email alert (only if broken links were found) ─────────
+      # This step ONLY runs if the link checker script exited with code 1
+      # (meaning broken links were detected)
+      #
+      # Uses the dawidd6/action-send-mail action to send via Gmail SMTP
+      # Credentials are stored as encrypted GitHub repository secrets
+      - name: Send email alert
+        if: steps.link_check.outcome == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_PASS }}
+          subject: "⚠️ Broken Links Detected - Riptide Monitor"
+          to: ${{ secrets.ALERT_EMAIL }}
+          from: "Riptide Monitor <${{ secrets.GMAIL_USER }}>"
+          body: |
+            Broken links have been detected on one or more client websites.
+
+            Please open the Riptide Monitor dashboard to see which sites are affected
+            and which specific links are broken.
+
+            This is an automated alert from Riptide Monitor.
+            Checked at: ${{ github.event.repository.updated_at }}
+
+            ──────────────────────────────────────
+            Do not reply to this email.
+            Riptide Studios — Internal Monitoring System

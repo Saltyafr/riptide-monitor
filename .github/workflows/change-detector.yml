@@ -1,0 +1,127 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# change-detector.yml
+# Riptide Studios — Site Health Monitor
+#
+# What this workflow does:
+#   1. Runs every day at 7:00am UTC on GitHub's servers (1 hour after link checker
+#      to avoid Git push conflicts between the two workflows)
+#   2. Installs node-fetch and cheerio npm packages
+#   3. Runs scripts/detect-changes.js against all sites in monitoring-data/sites.json
+#   4. Commits updated results and snapshot hash files back to the repo
+#   5. If site changes were detected (script exits with code 1), sends an email alert
+#
+# Can also be triggered manually from the GitHub Actions tab (workflow_dispatch).
+#
+# Required GitHub repository secrets (set in Settings → Secrets → Actions):
+#   GMAIL_USER   — The Gmail address used to send alert emails
+#   GMAIL_PASS   — The App Password for that Gmail account (NOT the login password)
+#   ALERT_EMAIL  — The email address that receives the alert (e.g. your work email)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Site Change Detector
+
+on:
+  schedule:
+    # Runs at 7:00am UTC every day (1 hour after the link checker at 6am)
+    # The gap prevents both workflows from trying to push to the repo at the same time
+    - cron: '0 7 * * *'
+
+  # Allows you to trigger this workflow manually from the Actions tab in GitHub
+  workflow_dispatch:
+
+jobs:
+  detect-changes:
+    name: Detect Site Changes
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ── Step 1: Check out the repository ──────────────────────────────────
+      # Downloads all repo files onto the runner, including the snapshot .hash files
+      # which are used as the baseline for comparison
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Step 2: Set up Node.js ────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Step 3: Install dependencies ──────────────────────────────────────
+      # node-fetch: lets the script fetch webpage HTML (like a browser would)
+      # cheerio:    lets the script parse and clean the HTML before hashing
+      # crypto and fs are built into Node — no install needed for those
+      - name: Install dependencies
+        run: npm install node-fetch@2 cheerio
+
+      # ── Step 4: Run the change detection script ───────────────────────────
+      # This is the main step. The script:
+      #   - Reads sites from monitoring-data/sites.json
+      #   - Fetches each site's homepage and generates a content hash
+      #   - Compares it to the stored baseline hash in monitoring-data/snapshots/
+      #   - If different → marks site as "changed"
+      #   - On first run for a new site → saves baseline hash, no alert
+      #   - Writes results to monitoring-data/change-results.json
+      #   - Updates all snapshot .hash files with the current hash
+      #   - Exits with code 1 if changes detected (triggers email step below)
+      #
+      # continue-on-error: true means the workflow continues even if this exits
+      # with code 1 — we still need to commit updated results and hash files
+      - name: Run change detector
+        id: change_detect
+        continue-on-error: true
+        run: node scripts/detect-changes.js
+
+      # ── Step 5: Commit and push results ───────────────────────────────────
+      # Commits three things back to the repo:
+      #   1. monitoring-data/change-results.json  (updated results for dashboard)
+      #   2. monitoring-data/snapshots/*.hash     (updated baseline hashes)
+      #
+      # Uses 'git diff --quiet' to check if anything actually changed before
+      # committing — prevents empty commits on days with no changes
+      - name: Commit and push results
+        run: |
+          git config user.email "monitor@riptidestudios.co.za"
+          git config user.name "Riptide Monitor"
+
+          git add monitoring-data/change-results.json
+          git add monitoring-data/snapshots/
+
+          # Only commit if there are actual changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit — results and hashes unchanged."
+          else
+            git commit -m "Update change detection results [$(date -u '+%Y-%m-%d %H:%M') UTC]"
+            git push
+          fi
+
+      # ── Step 6: Send email alert (only if changes were detected) ──────────
+      # This step ONLY runs if the change detector script exited with code 1
+      # (meaning one or more sites had content changes since the last check)
+      - name: Send email alert
+        if: steps.change_detect.outcome == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_PASS }}
+          subject: "⚠️ Site Changes Detected - Riptide Monitor"
+          to: ${{ secrets.ALERT_EMAIL }}
+          from: "Riptide Monitor <${{ secrets.GMAIL_USER }}>"
+          body: |
+            Unexpected content changes have been detected on one or more client websites.
+
+            This could indicate an unauthorised edit, a CMS update that went wrong,
+            or intentional changes that were not communicated to Riptide Studios.
+
+            Please open the Riptide Monitor dashboard to see which sites are affected.
+
+            This is an automated alert from Riptide Monitor.
+            Checked at: ${{ github.event.repository.updated_at }}
+
+            ──────────────────────────────────────
+            Do not reply to this email.
+            Riptide Studios — Internal Monitoring System
