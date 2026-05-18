@@ -1,3 +1,9 @@
 {
-  "sites": []
+  "sites": [
+    {
+      "id": "site_1779099810708",
+      "name": "BUFF Detailing",
+      "url": "https://www.buffdetailing.co.za"
+    }
+  ]
 }
