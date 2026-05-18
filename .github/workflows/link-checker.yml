@@ -26,7 +26,7 @@ on:
     - cron: '0 6 * * *'
 
   # Allows you to trigger this workflow manually from the Actions tab in GitHub
-workflow_dispatch:
+  workflow_dispatch:
 
 permissions:
   contents: write
